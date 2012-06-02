@@ -61,7 +61,7 @@
 				var pattern:RegExp = /(?<!\S)(((f|ht){1}tp[s]?:\/\/|(?<!\S)www\.)[-a-zA-Z0-9@:%_\+.~#?&\/\/=]+)/g;
 				while(pattern.test(text)) result = text.replace(pattern, "");
 				if(result == '') result+= text;//if there was nothing to replace
-				return result;
+				return result.toLowerCase();
 			}
 						
 			protected function handleTwitsLoadComplete(event:Event):void
