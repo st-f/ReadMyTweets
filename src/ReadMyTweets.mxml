@@ -55,12 +55,15 @@
 				//return "http://translate.google.com/translate_tts?q="+textToRead;
 			}
 			
-			protected function removeLinks(text:String):String
+			protected function removeLinksSpecialChars(text:String):String
 			{
 				var result:String = '';
 				var pattern:RegExp = /(?<!\S)(((f|ht){1}tp[s]?:\/\/|(?<!\S)www\.)[-a-zA-Z0-9@:%_\+.~#?&\/\/=]+)/g;
 				while(pattern.test(text)) result = text.replace(pattern, "");
 				if(result == '') result+= text;//if there was nothing to replace
+				result.replace(/[^\w\s]/gi, ''); //remove all special chars
+				var whitespace:RegExp = /\s/g; 
+				result = result.replace(whitespace, ' '); //and unecessary whitespaces
 				return result.toLowerCase();
 			}
 						
@@ -76,6 +79,7 @@
 				for (var index:int = 0; index < tmplist.length(); index++) 
 				{
 					var tmpStr:String = String(tmplist[index]);
+					tmpStr = removeLinksSpecialChars(tmpStr);
 					trace("add twit: "+tmpStr);
 					var twitChunksLength:int = Math.ceil(tmpStr.length / CHUNK_SIZE);
 					var twitArray:Array = [];
@@ -87,8 +91,8 @@
 						{
 							end = tmpStr.length;
 						}
-						trace("add chunck: "+removeLinks(tmpStr.slice(start, end)));
-						twitArray.push(removeLinks(tmpStr.slice(start, end)));
+						trace("add chunck: "+tmpStr.slice(start, end));
+						twitArray.push(tmpStr.slice(start, end));
 					}
 					twits.push(twitArray);
 				}
@@ -106,6 +110,7 @@
 				sndChannel = snd.play();
 				if(!sndChannel.hasEventListener(Event.SOUND_COMPLETE))
 				{
+					snd.addEventListener(IOErrorEvent.IO_ERROR, playSound, false, 0, true);
 					sndChannel.addEventListener(Event.SOUND_COMPLETE, playSound, false, 0, true);
 				}
 			}   
