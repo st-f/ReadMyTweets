@@ -120,7 +120,7 @@
 		<s:Label id="debugText" />
 		<s:Form verticalCenter="0" horizontalCenter="0">
 			<s:FormItem label="twitter username">
-				<s:TextInput id="twitterUsernameTI" text="sbhsbh" />
+				<s:TextInput id="twitterUsernameTI" text="html5douche" />
 			</s:FormItem>
 			<s:FormItem label="language (en for english etc.)">
 				<s:TextInput id="twitterLanguageTI" text="en" />
