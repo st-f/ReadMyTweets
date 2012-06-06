@@ -107,11 +107,12 @@
 				if(currentTweet > tweets.length-1)
 				{
 					currentTweet = 0;
+					readTweets();
+					return "";
 				}
 				textToRead = tweets[currentTweet][currentTweetChunk];
-				/* debugText.text = "Reading tweet "+currentTweet+" / "+(tweets.length-1)
-					+" chunck "+currentTweetChunk+" / "+(tweets[currentTweet].length-1)
-						+" text: "+textToRead; */
+				progressLabel.text = "Reading tweet "+currentTweet+" / "+(tweets.length-1)
+					+" chunck "+currentTweetChunk+" / "+(tweets[currentTweet].length-1);
 				debugLabel.text = textToRead;
 				trace("\nREAD: "+textToRead);
 				if(proxied)
@@ -235,7 +236,7 @@
 			{
 				if(event is IOErrorEvent)
 				{
-					throw new Error("CAN'T LOAD AUDIO FILE: "+IOErrorEvent(event).text);
+					trace("CAN'T LOAD AUDIO FILE: "+IOErrorEvent(event).text);
 				}
 				if(sndChannel) stopSound();
 				if(event)
@@ -296,10 +297,10 @@
 	<s:VGroup verticalCenter="0" horizontalCenter="0"
 			  left="20" right="20" top="20" bottom="20" gap="20">
 		<s:Image id="pic" horizontalCenter="0" />
-		<s:Label id="debugLabel" fontSize="32" width="{this.width - 40}" />
-		<s:HGroup width="100%">
+		<s:Label id="debugLabel" fontSize="32" width="{this.width - 40}" minHeight="130" />
+		<s:HGroup width="100%" verticalAlign="middle">
 			<s:Button id="openTweetBtn" label="OPEN TWEET" click="openCurrentTweet()" enabled="false" />
-			<s:Spacer width="100%" />
+			<s:Label id="progressLabel" width="100%" textAlign="center" />
 			<s:Button id="readPrevBtn" label="READ PREVIOUS" click="readPreviousTweet(event)" enabled="false" />
 			<s:Button id="readNextBtn" label="READ NEXT" click="readNextTweet(event)" enabled="false" />
 		</s:HGroup>
