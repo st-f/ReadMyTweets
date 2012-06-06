@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   applicationComplete="handleAppReady(event)">
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayList;
+			import mx.events.FlexEvent;
+			//each Tweet is stored in an array, splitted packets. All Tweets are saved in a main array.
+			protected static const TWEETS_TO_LOAD:int = 50;
+			protected static const CHUNK_SIZE:int = 90; //max size that can be read by unofficial google translate API. Might be increased to match word end. So keep it 10% below limit
+			protected static const MIN_TWEET_LENGTH:int = 20; //to avoid link only tweets. Or help debug long tweets. Shouldn't be less than CHUNK_SIZE
+			/* protected static const DEFAULT_TWITTER_ACCOUNT:String = "1billionhungry";
+			protected static const DEFAULT_TWITTER_LANGUAGE:String = "en"; */
+			protected static const DEFAULT_TWITTER_ACCOUNT:String = "lemondefr";
+			protected static const DEFAULT_TWITTER_LANGUAGE:String = "fr";
+			protected static const TWITTER_FEEDS:Array = [{name:"lemondefr", lang:"fr"},
+															{name:"liberation_info", lang:"fr"},
+															{name:"franceinfo", lang:"fr"},
+															{name:"Rue89", lang:"fr"},
+															{name:"cnnbrk", lang:"en"},
+															{name:"engadget", lang:"en"}];
+			
+			protected var accountName:String;
+			protected var tweets:Array;
+			protected var currentTweet:int = 0;
+			protected var currentTweetChunk:int = 0;
+			//for tweets parsing
+			protected var tmp:XML;
+			protected var tweetsTextsList:XMLList;
+			protected var tweetsLinksList:XMLList;
+			protected var nextWordDiff:int;//the number of chars added to match next word index
+			protected var tmpStr:String;
+			protected var TweetChunksLength:int;
+			protected var TweetArray:Array;
+			protected var chunkStr:String;
+			protected var chunkStartIndex:int;
+			protected var chunkEndIndex:int;
+			protected var chunkTmpEndIndex:int;
+			//sound
+			protected var snd:Sound; 
+			protected var sndChannel:SoundChannel;
+			//protected var sndLoaderContext:SoundLoaderContext;
+			
+			protected function readTweets(event:MouseEvent = null):void
+			{
+				readBtn.enabled = readPrevBtn.enabled = readNextBtn.enabled = openTweetBtn.enabled = false;
+				var req:URLLoader = new URLLoader();
+				req.addEventListener(Event.COMPLETE, handleTweetsLoadComplete, false, 0, true);
+				req.addEventListener(IOErrorEvent.IO_ERROR, handleTweetsLoadingIO, false, 0, true);
+				req.addEventListener(SecurityErrorEvent.SECURITY_ERROR, handleTweetsLoadingSecError, false, 0, true);
+				req.load(new URLRequest(getFeedURL(twitterUsernameTI.text)));
+				trace("Loading tweets at "+getFeedURL(twitterUsernameTI.text));
+				debugLabel.text = "loading tweets...";
+			}
+			
+			protected function handleTweetsLoadingIO(event:IOErrorEvent):void
+			{
+				trace("IOERROR : "+event.text);
+			}
+			
+			protected function handleTweetsLoadingSecError(event:SecurityErrorEvent):void
+			{
+				trace("SECURITY ERROR : "+event.text);
+			}
+			
+			protected function openCurrentTweet():void
+			{
+				var tweetURL:String = "https://www.twitter.com/"+accountName+"/status/"+tweetsLinksList[currentTweet].toString();
+				trace("opening: "+tweetURL);
+				navigateToURL(new URLRequest(tweetURL), "_blank");
+			}
+			
+			protected function readPreviousTweet(event:MouseEvent):void
+			{
+				if(!tweets) return;
+				currentTweet--;
+				if(currentTweet < 0)
+				{
+					currentTweet = tweets.length-1;
+				}
+				playSound();
+			}
+			
+			protected function readNextTweet(event:MouseEvent):void
+			{
+				if(!tweets) return;
+				currentTweet++;
+				playSound();
+			}
+			
+			protected function getFeedURL(username:String):String
+			{
+				return "https://www.twitter.com/statuses/user_timeline/"+username+".xml?count="+TWEETS_TO_LOAD;
+			}
+			
+			protected function getMP3URL(proxied:Boolean = false):String
+			{
+				var textToRead:String = "";
+				var url:String;
+				if(currentTweetChunk > tweets[currentTweet].length-1)
+				{
+					currentTweetChunk = 0;
+					currentTweet++;
+				}
+				if(currentTweet > tweets.length-1)
+				{
+					currentTweet = 0;
+				}
+				textToRead = tweets[currentTweet][currentTweetChunk];
+				/* debugText.text = "Reading tweet "+currentTweet+" / "+(tweets.length-1)
+					+" chunck "+currentTweetChunk+" / "+(tweets[currentTweet].length-1)
+						+" text: "+textToRead; */
+				debugLabel.text = textToRead;
+				trace("\nREAD: "+textToRead);
+				if(proxied)
+				{
+					url = "http://lab.st-f.net/public/ReadMyTweets/crossdomain-proxy.php" 
+						+ "?mimeType=audio/x-mpeg-3"
+						+ "&url=http://translate.google.com/translate_tts?hl="
+						+twitterLanguageTI.text+"&q="+encodeURI(textToRead);
+				}
+				else
+				{
+					url = "http://translate.google.com/translate_tts?hl="+twitterLanguageTI.text+"&q="+encodeURI(textToRead);
+				}
+				trace("URL: " + url);
+				return url;
+			}
+			
+			protected function cleanString(text:String):String
+			{
+				var result:String = '';
+				var pattern:RegExp = /(?<!\S)(((f|ht){1}tp[s]?:\/\/|(?<!\S)www\.)[-a-zA-Z0-9@:%_\+.~#?&\/\/=]+)/g;
+				while(pattern.test(text)) result = text.replace(pattern, "");
+				if(result == '') result+= text;//if there was nothing to replace
+				result = result.replace(/\s\s+/g, ' '); //and unecessary whitespaces
+				result = result.replace(/\[|\]|\(|\)|\{|\}|#/g, ' '); //and brackets of all kind and hash
+				if(result.charAt(result.length-1) == ' ')
+				{
+					//sometimes the last char can be a space. we remove it here.
+					trace("remove last char");
+					result = result.substr(0, -1);
+				}
+				return result;
+			}
+			
+			protected function handleTweetsLoadComplete(event:Event):void
+			{
+				readBtn.enabled = readPrevBtn.enabled = readNextBtn.enabled = openTweetBtn.enabled = true;
+				tweets = [];
+				currentTweet = 0;
+				currentTweetChunk = 0;
+				tmp = new XML(event.target.data);
+				accountName = twitterUsernameTI.text;
+				pic.source = tmp.status[0].user.profile_image_url.toString();
+				tweetsTextsList = new XMLList(tmp.status.text);
+				tweetsLinksList = new XMLList(tmp.status.id);
+				trace("tmplist.length: "+tweetsTextsList.length());
+				debugLabel.text = tweetsTextsList.length()+" tweets loaded.";
+				for (var index:int = 0; index < tweetsTextsList.length(); index++) 
+				{
+					tmpStr = cleanString(String(tweetsTextsList[index]));
+					if(tmpStr.length > MIN_TWEET_LENGTH)
+					{
+						trace("\n"+index+" ["+tmpStr.length+"] add tweet id "+tweetsLinksList[index].toString()+": "+tmpStr);
+						TweetChunksLength = Math.ceil(tmpStr.length / CHUNK_SIZE);
+						TweetArray = [];
+						nextWordDiff = 0;
+						for (var chunckIndex:int = 0; chunckIndex < TweetChunksLength; chunckIndex++) 
+						{
+							chunkStartIndex = chunckIndex * CHUNK_SIZE;
+							chunkEndIndex = chunckIndex * CHUNK_SIZE + CHUNK_SIZE;
+							if(chunckIndex == (TweetChunksLength-1))
+							{
+								chunkEndIndex = tmpStr.length;
+							}
+							else
+							{
+								chunkTmpEndIndex = chunkEndIndex;
+								chunkEndIndex = returnCloserNewWordIndex(tmpStr, chunkEndIndex);
+								nextWordDiff += chunkEndIndex-chunkTmpEndIndex;
+							}
+							if(chunkStartIndex != 0) chunkStartIndex += nextWordDiff;
+							chunkStr = tmpStr.slice(chunkStartIndex, chunkEndIndex);
+							if(chunkStr.length > 1)
+							{
+								trace("["+chunkStartIndex+" > "+chunkEndIndex+"] add chunck: "+chunkStr);
+								TweetArray.push(chunkStr);
+							}
+						}
+						tweets.push(TweetArray);
+					}
+					else
+					{
+						trace(index + " - TWEET TOO SHORT, WONT BE ADDED: "+tmpStr);
+					}
+				}
+				playSound();
+			}
+			
+			protected function returnCloserNewWordIndex(str:String, index:int):int
+			{
+				var spaces:Array = str.split(" ");
+				var totalchars:int = 0;
+				//trace("looking for closer entire word at index: "+index+" spaces: "+spaces);
+				if(str.charAt(index) == " " 
+					|| str.charAt(index) == "!"
+					|| str.charAt(index) == ","
+					|| str.charAt(index) == ";"
+					|| str.charAt(index) == ".")
+				{
+					//trace("> char is already space, point, comma or exclamation mark.");
+					return index;
+				}
+				for (var letterIndex:int = 0; letterIndex < spaces.length; letterIndex++) 
+				{
+					totalchars += spaces[letterIndex].length + 1; //+1 space
+					//trace("looking for next word: "+totalchars+" / "+index);
+					if(totalchars >= index)
+					{
+						return totalchars;
+					}
+				}
+				return -1;
+			}
+			
+			protected function onStatus(event:HTTPStatusEvent):void
+			{
+				trace("onStatus: "+event.responseHeaders);
+			}
+			
+			public function playSound(event:Event = null):void 
+			{
+				if(event is IOErrorEvent)
+				{
+					throw new Error("CAN'T LOAD AUDIO FILE: "+IOErrorEvent(event).text);
+				}
+				if(sndChannel) stopSound();
+				if(event)
+				{
+					currentTweetChunk++;
+				}
+				snd = new Sound(new URLRequest(getMP3URL()));
+				sndChannel = snd.play();
+				//sndChannel.soundTransform.volume = .1;
+				if(!sndChannel.hasEventListener(Event.SOUND_COMPLETE))
+				{
+					snd.addEventListener(IOErrorEvent.IO_ERROR, playSound, false, 0, true);
+					snd.addEventListener(ProgressEvent.PROGRESS, handleSoundLoadProgress, false, 0, true);
+					snd.addEventListener(Event.OPEN, handleSoundOpen, false, 0, true);
+					sndChannel.addEventListener(Event.SOUND_COMPLETE, playSound, false, 0, true);
+				}
+			}   
+			
+			protected function handleSoundOpen(event:Event):void
+			{
+				//trace("Opening sound: "+event.toString());
+			}			
+			
+			protected function handleSoundLoadProgress(event:ProgressEvent):void
+			{
+				//trace("Sound load progress: "+event.bytesLoaded+" / "+event.bytesTotal);
+			}
+			
+			public function stopSound():void 
+			{
+				sndChannel.stop();
+			} 
+			
+			protected function handleAppReady(event:FlexEvent):void
+			{
+				trace("app ready: "+Security.sandboxType);
+				feedsList.dataProvider = new ArrayList(TWITTER_FEEDS);
+			}
+			
+			protected function handleListClick(event:MouseEvent):void
+			{
+				trace("click: "+feedsList.selectedItem.name);
+				twitterUsernameTI.text = feedsList.selectedItem.name;
+				twitterLanguageTI.text = feedsList.selectedItem.lang;
+				readTweets();
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";		
+		s|FormItem s|Label#labelDisplay 
+		{
+			textAlign: right;
+		}
+	</fx:Style>
+	<s:VGroup verticalCenter="0" horizontalCenter="0"
+			  left="20" right="20" top="20" bottom="20" gap="20">
+		<s:Image id="pic" horizontalCenter="0" />
+		<s:Label id="debugLabel" fontSize="32" width="{this.width - 40}" />
+		<s:HGroup width="100%">
+			<s:Button id="openTweetBtn" label="OPEN TWEET" click="openCurrentTweet()" enabled="false" />
+			<s:Spacer width="100%" />
+			<s:Button id="readPrevBtn" label="READ PREVIOUS" click="readPreviousTweet(event)" enabled="false" />
+			<s:Button id="readNextBtn" label="READ NEXT" click="readNextTweet(event)" enabled="false" />
+		</s:HGroup>
+		<mx:HRule width="100%" />
+		<s:HGroup width="100%">
+			<s:BorderContainer width="50%">
+				<s:Form width="100%" verticalCenter="0" horizontalCenter="0" defaultButton="{readBtn}">
+					<s:FormItem label="Twitter username" width="100%" baseline="maxAscent:100">
+						<s:TextInput id="twitterUsernameTI" text="{DEFAULT_TWITTER_ACCOUNT}" width="100%" />
+					</s:FormItem>
+					<s:FormItem label="language (ISO)" width="100%">
+						<s:TextInput id="twitterLanguageTI" text="{DEFAULT_TWITTER_LANGUAGE}" />
+					</s:FormItem>
+					<s:Button label="READ" id="readBtn" click="readTweets(event)" />
+				</s:Form>
+			</s:BorderContainer>
+			<s:List id="feedsList" width="50%" height="100%" click="handleListClick(event)" labelField="name" />
+		</s:HGroup>
+	</s:VGroup>
+	<s:Label id="creditsLabel" width="100%" fontSize="12" text="@stefblog MMXII" textAlign="center" bottom="10"/>
+</s:Application>
