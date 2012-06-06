@@ -45,7 +45,7 @@
 			
 			protected function readTweets(event:MouseEvent = null):void
 			{
-				readBtn.enabled = readPrevBtn.enabled = readNextBtn.enabled = openTweetBtn.enabled = false;
+				readBtn.enabled = readPrevBtn.enabled = readNextBtn.enabled = openTweetBtn.enabled = playPauseBtn.enabled = false;
 				var req:URLLoader = new URLLoader();
 				req.addEventListener(Event.COMPLETE, handleTweetsLoadComplete, false, 0, true);
 				req.addEventListener(IOErrorEvent.IO_ERROR, handleTweetsLoadingIO, false, 0, true);
@@ -149,7 +149,7 @@
 			
 			protected function handleTweetsLoadComplete(event:Event):void
 			{
-				readBtn.enabled = readPrevBtn.enabled = readNextBtn.enabled = openTweetBtn.enabled = true;
+				readBtn.enabled = readPrevBtn.enabled = readNextBtn.enabled = openTweetBtn.enabled = playPauseBtn.enabled = true;
 				tweets = [];
 				currentTweet = 0;
 				currentTweetChunk = 0;
@@ -268,7 +268,7 @@
 			public function stopSound():void 
 			{
 				sndChannel.stop();
-			} 
+			}
 			
 			protected function handleAppReady(event:FlexEvent):void
 			{
@@ -282,6 +282,22 @@
 				twitterUsernameTI.text = feedsList.selectedItem.name;
 				twitterLanguageTI.text = feedsList.selectedItem.lang;
 				readTweets();
+			}
+			
+			protected function playPause(event:MouseEvent):void
+			{
+				if(!sndChannel) return;
+				trace("playPause: "+event.target.selected);
+				if(playPauseBtn.selected)
+				{
+					playPauseBtn.label = "PAUSE";
+					playSound();
+				}
+				else
+				{
+					playPauseBtn.label = "PLAY";
+					stopSound();
+				}					
 			}
 			
 		]]>
@@ -301,6 +317,7 @@
 		<s:HGroup width="100%" verticalAlign="middle">
 			<s:Button id="openTweetBtn" label="OPEN TWEET" click="openCurrentTweet()" enabled="false" />
 			<s:Label id="progressLabel" width="100%" textAlign="center" />
+			<s:ToggleButton id="playPauseBtn" label="PAUSE" selected="true" click="playPause(event)" enabled="false" />
 			<s:Button id="readPrevBtn" label="READ PREVIOUS" click="readPreviousTweet(event)" enabled="false" />
 			<s:Button id="readNextBtn" label="READ NEXT" click="readNextTweet(event)" enabled="false" />
 		</s:HGroup>
